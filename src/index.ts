@@ -64,14 +64,16 @@ export class SqliteSTM {
   // Create a new TVar
   newTVar<T>(id: string, initialValue: T): void {
     try {
-      // Check if TVar already exists
-      const existing = this.db.prepare('SELECT id FROM tvars WHERE id = ?').get(id);
-      if (existing) {
-        throw new Error(`TVar ${id} already exists`);
-      }
+      return this.atomically((tx) => {
+        // Check if TVar already exists
+        const existing = this.db.prepare('SELECT id FROM tvars WHERE id = ?').get(id);
+        if (existing) {
+          throw new Error(`TVar ${id} already exists`);
+        }
 
-      // Create new TVar
-      this.statements.createTVar.run(id, JSON.stringify(initialValue));
+        // Create new TVar
+        this.statements.createTVar.run(id, JSON.stringify(initialValue));
+      });
     } catch (err) {
       console.error('Error creating TVar:', err);
       throw err;

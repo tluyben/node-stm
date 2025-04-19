@@ -4,7 +4,7 @@ describe('SqliteSTM', () => {
   let stm: SqliteSTM;
 
   beforeEach(() => {
-    stm = new SqliteSTM(1);
+    stm = new SqliteSTM();
   });
 
   describe('newTVar', () => {

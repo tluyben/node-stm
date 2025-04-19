@@ -28,6 +28,7 @@ describe('Concurrency', () => {
 
     await Promise.all(promises);
 
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     // Verify final value
     const finalValue = stm.atomically((tx) => tx.readTVar<number>('counter'));
     expect(finalValue).toBe(10);

@@ -39,7 +39,8 @@ export class SqliteSTM {
 
   constructor(db?: number) {
     if (!db) {
-      db = dbCount++;
+      // this seems a lot safer for running tests in parallel
+      db = 10 + Math.floor(Math.random() * 100000);
     }
     this.db = this.initDb(db, true);
     this.dbId = db;

@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 const SHARED_DB_URI = 'file:memdb1?mode=memory&cache=shared';
 
 export class SqliteSTM {
-  private db: any;
+  private db: Database.Database;
   private statements: Record<string, any> = {};
 
   constructor(db: number, empty: boolean = false) {

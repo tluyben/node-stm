@@ -140,8 +140,8 @@ class Transaction {
   }
 
   execute<T>(fn: () => T): T {
-    // Begin SQLite transaction with IMMEDIATE to get write lock
-    this.db.prepare('BEGIN IMMEDIATE TRANSACTION').run();
+    // Begin SQLite transaction with to get write lock
+    this.db.prepare('BEGIN TRANSACTION').run();
 
     try {
       // Execute user function

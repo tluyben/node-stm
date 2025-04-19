@@ -4,7 +4,7 @@ describe('Example Scenario', () => {
   let stm: SqliteSTM;
 
   beforeEach(() => {
-    stm = new SqliteSTM();
+    stm = new SqliteSTM(1, true);
   });
 
   it('should handle the money transfer example correctly', () => {

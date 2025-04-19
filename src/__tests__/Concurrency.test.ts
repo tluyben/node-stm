@@ -4,7 +4,7 @@ describe('Concurrency', () => {
   let stm: SqliteSTM;
 
   beforeEach(() => {
-    stm = new SqliteSTM();
+    stm = new SqliteSTM(1, true);
   }, 30000); // Increased timeout to 30 seconds
 
   it('should handle concurrent transactions correctly', async () => {

@@ -1,33 +1,47 @@
 import Database from 'better-sqlite3';
 
+const SHARED_DB_URI = 'file:memdb1?mode=memory&cache=shared';
+
 export class SqliteSTM {
   private db: any;
   private statements: Record<string, any> = {};
-  
-  constructor() {
+
+  constructor(db: number, empty: boolean = false) {
     // Create in-memory database
-    this.db = new Database(':memory:');
-    
+    this.db = new Database(`file:memdb${db}?mode=memory&cache=shared`);
+
     // Enable JSON support
+    // this.db.pragma('journal_mode = WAL');
     this.db.pragma('json_enabled = ON');
-    
+
     // Create table for storing TVars
+    if (empty) {
+      // delete the tvars table
+      this.db.exec('DROP TABLE IF EXISTS tvars');
+    }
+
     this.db.exec(`
-      CREATE TABLE tvars (
+      CREATE TABLE IF NOT EXISTS tvars (
         id TEXT PRIMARY KEY,
         value JSON NOT NULL, 
         version INTEGER NOT NULL DEFAULT 0
       )
     `);
-    
+
     // Prepare common statements
     this.statements = {
       createTVar: this.db.prepare('INSERT INTO tvars (id, value, version) VALUES (?, json(?), 0)'),
       readTVar: this.db.prepare('SELECT value, version FROM tvars WHERE id = ?'),
-      updateTVar: this.db.prepare('UPDATE tvars SET value = json(?), version = version + 1 WHERE id = ? AND version = ?'),
+      updateTVar: this.db.prepare(
+        'UPDATE tvars SET value = json(?), version = version + 1 WHERE id = ? AND version = ?'
+      ),
       readJsonPath: this.db.prepare('SELECT json_extract(value, ?) FROM tvars WHERE id = ?'),
-      updateJsonPath: this.db.prepare('UPDATE tvars SET value = json_set(value, ?, json(?)), version = version + 1 WHERE id = ? AND version = ?'),
-      readArrayLength: this.db.prepare('SELECT json_array_length(json_extract(value, ?)) FROM tvars WHERE id = ?')
+      updateJsonPath: this.db.prepare(
+        'UPDATE tvars SET value = json_set(value, ?, json(?)), version = version + 1 WHERE id = ? AND version = ?'
+      ),
+      readArrayLength: this.db.prepare(
+        'SELECT json_array_length(json_extract(value, ?)) FROM tvars WHERE id = ?'
+      ),
     };
   }
 
@@ -39,7 +53,7 @@ export class SqliteSTM {
       if (existing) {
         throw new Error(`TVar ${id} already exists`);
       }
-      
+
       // Create new TVar
       this.statements.createTVar.run(id, JSON.stringify(initialValue));
     } catch (err) {
@@ -80,20 +94,20 @@ export class SqliteSTM {
 class Transaction {
   private db: any;
   private statements: Record<string, any>;
-  
+
   constructor(db: any, statements: Record<string, any>) {
     this.db = db;
     this.statements = statements;
   }
-  
+
   execute<T>(fn: () => T): T {
     // Begin SQLite transaction with IMMEDIATE to get write lock
     this.db.prepare('BEGIN IMMEDIATE TRANSACTION').run();
-    
+
     try {
       // Execute user function
       const result = fn();
-      
+
       // Commit transaction
       this.db.prepare('COMMIT').run();
       return result;
@@ -103,18 +117,18 @@ class Transaction {
       throw err;
     }
   }
-  
+
   // Read a TVar
   readTVar<T>(id: string): T {
     const row = this.statements.readTVar.get(id);
-    
+
     if (!row) {
       throw new Error(`TVar ${id} does not exist`);
     }
-    
+
     return typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
   }
-  
+
   // Write to a TVar
   writeTVar<T>(id: string, value: T): void {
     // Get current version
@@ -122,60 +136,54 @@ class Transaction {
     if (!row) {
       throw new Error(`TVar ${id} does not exist`);
     }
-    
+
     // Update with optimistic concurrency control
     const result = this.statements.updateTVar.run(JSON.stringify(value), id, row.version);
     if (result.changes === 0) {
       throw new Error('Concurrent modification detected');
     }
   }
-  
+
   // Read a specific path within a JSON object TVar
   readTVarPath<T>(id: string, path: string): T {
     // Format path for SQLite json_extract (ensure it starts with $)
     const sqlitePath = this.formatSqlitePath(path);
-    
+
     const row = this.statements.readJsonPath.get(sqlitePath, id);
     if (!row) {
       throw new Error(`TVar ${id} does not exist`);
     }
 
-    const value = row['json_extract(value, ?)'];
+    let value = row['json_extract(value, ?)'];
+    if (value && typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+      value = JSON.parse(value);
+    }
+
     if (value === null) {
       throw new Error(`Path ${path} does not exist in TVar ${id}`);
     }
-    
+
     return value;
   }
-  
+
   // Update a specific path within a JSON object TVar
   updateTVarPath<T>(id: string, path: string, value: T): void {
     // Format path for SQLite json_set (ensure it starts with $)
     const sqlitePath = this.formatSqlitePath(path);
-    
+
     // Get current version
     const row = this.statements.readTVar.get(id);
     if (!row) {
       throw new Error(`TVar ${id} does not exist`);
     }
 
-    // If updating an array, ensure we're not creating duplicate entries
-    if (path.endsWith('.transactions')) {
-      const parentPath = sqlitePath.substring(0, sqlitePath.lastIndexOf('.transactions'));
-      const lengthRow = this.statements.readArrayLength.get(`${parentPath}.transactions`, id);
-      const currentLength = lengthRow ? lengthRow['json_array_length(json_extract(value, ?))'] : 0;
-      
-      if (Array.isArray(value)) {
-        const newValue = value as unknown as any[];
-        if (newValue.length > currentLength + 1) {
-          // Only take the new entry
-          value = [newValue[newValue.length - 1]] as unknown as T;
-        }
-      }
-    }
-    
     // Update with optimistic concurrency control
-    const result = this.statements.updateJsonPath.run(sqlitePath, JSON.stringify(value), id, row.version);
+    const result = this.statements.updateJsonPath.run(
+      sqlitePath,
+      JSON.stringify(value),
+      id,
+      row.version
+    );
     if (result.changes === 0) {
       throw new Error('Concurrent modification detected');
     }

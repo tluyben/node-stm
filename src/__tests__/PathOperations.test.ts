@@ -4,7 +4,7 @@ describe('Path Operations', () => {
   let stm: SqliteSTM;
 
   beforeEach(() => {
-    stm = new SqliteSTM();
+    stm = new SqliteSTM(1, true);
   });
 
   describe('readTVarPath', () => {

@@ -1,32 +1,48 @@
 import Database from 'better-sqlite3';
 
 const SHARED_DB_URI = 'file:memdb1?mode=memory&cache=shared';
-
+let dbCount = 0;
 export class SqliteSTM {
   private db: Database.Database;
   private statements: Record<string, any> = {};
+  private dbId: number;
+  private inTransaction: boolean = false;
 
-  constructor(db: number, empty: boolean = false) {
+  protected initDb(db: number, empty: boolean = false): Database.Database {
     // Create in-memory database
-    this.db = new Database(`file:memdb${db}?mode=memory&cache=shared`);
+    const localDb = new Database(`file:memdb${db}?mode=memory&cache=shared`);
 
     // Enable JSON support
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('json_enabled = ON');
+    localDb.pragma('journal_mode = WAL');
+    localDb.pragma('json_enabled = ON');
 
     // Create table for storing TVars
     if (empty) {
       // delete the tvars table
-      this.db.exec('DROP TABLE IF EXISTS tvars');
+      localDb.exec('DROP TABLE IF EXISTS tvars');
     }
 
-    this.db.exec(`
+    localDb.exec(`
       CREATE TABLE IF NOT EXISTS tvars (
         id TEXT PRIMARY KEY,
         value JSON NOT NULL, 
         version INTEGER NOT NULL DEFAULT 0
       )
     `);
+
+    return localDb;
+  }
+
+  newConnection() {
+    return new SqliteSTM(this.dbId);
+  }
+
+  constructor(db?: number) {
+    if (!db) {
+      db = dbCount++;
+    }
+    this.db = this.initDb(db, true);
+    this.dbId = db;
 
     // Prepare common statements
     this.statements = {
@@ -67,12 +83,18 @@ export class SqliteSTM {
     let attempts = 0;
     const maxAttempts = 1000;
 
+    if (this.inTransaction) {
+      return this.newConnection().atomically(fn);
+    }
+
     while (true) {
       const tx = new Transaction(this.db, this.statements);
 
       try {
+        this.inTransaction = true;
         return tx.execute(() => fn(tx));
       } catch (err) {
+        this.inTransaction = false;
         if (err instanceof Error && err.message === 'Concurrent modification detected') {
           attempts++;
           if (attempts >= maxAttempts) {
@@ -86,6 +108,8 @@ export class SqliteSTM {
           continue; // Retry transaction
         }
         throw err;
+      } finally {
+        this.inTransaction = false;
       }
     }
   }

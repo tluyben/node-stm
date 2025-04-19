@@ -4,7 +4,7 @@ describe('Transaction', () => {
   let stm: SqliteSTM;
 
   beforeEach(() => {
-    stm = new SqliteSTM(1, true);
+    stm = new SqliteSTM();
   });
 
   describe('readTVar', () => {
@@ -132,8 +132,8 @@ describe('Transaction', () => {
   describe('execute', () => {
     it('should detect version conflicts and retry', async () => {
       // Create two separate STM instances
-      const stm1 = new SqliteSTM(2, true);
-      const stm2 = new SqliteSTM(2, false);
+      const stm1 = new SqliteSTM();
+      const stm2 = stm1.newConnection();
 
       // Initialize the TVar in both connections
       stm1.newTVar('counter', 0);

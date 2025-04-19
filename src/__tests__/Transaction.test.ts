@@ -132,8 +132,8 @@ describe('Transaction', () => {
   describe('execute', () => {
     it('should detect version conflicts and retry', async () => {
       // Create two separate STM instances
-      const stm1 = new SqliteSTM(1, true);
-      const stm2 = new SqliteSTM(1, false);
+      const stm1 = new SqliteSTM(2, true);
+      const stm2 = new SqliteSTM(2, false);
 
       // Initialize the TVar in both connections
       stm1.newTVar('counter', 0);

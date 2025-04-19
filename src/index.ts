@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import os from 'os';
 
 const SHARED_DB_URI = 'file:memdb1?mode=memory&cache=shared';
 let dbCount = 0;
@@ -8,9 +9,18 @@ export class SqliteSTM {
   private dbId: number;
   private inTransaction: boolean = false;
 
-  protected initDb(db: number, empty: boolean = false): Database.Database {
+  protected initDb(db: number, empty: boolean = false, dir?: string): Database.Database {
     // Create in-memory database
-    const localDb = new Database(`file:memdb${db}?mode=memory&cache=shared`);
+    // Unfortunately, better-sqlite3 does not support shared memory databases
+    // so we need to create a new database for each instance
+    // const localDb = new Database(`file:memdb${db}?mode=memory&cache=shared`);
+    // TODO: the actual sqlite official memory use works in better-sqlite3 5.x.x, but that version is no longer on
+    // npm so we need to compile + push it
+    if (!dir) {
+      // dir should be a temp directory;
+      dir = os.tmpdir();
+    }
+    const localDb = new Database(`${dir}/memdb${db}`, {});
 
     // Enable JSON support
     localDb.pragma('journal_mode = WAL');
@@ -37,12 +47,12 @@ export class SqliteSTM {
     return new SqliteSTM(this.dbId);
   }
 
-  constructor(db?: number) {
+  constructor(db?: number, dir?: string) {
     if (!db) {
       // this seems a lot safer for running tests in parallel
       db = 10 + Math.floor(Math.random() * 100000);
     }
-    this.db = this.initDb(db, true);
+    this.db = this.initDb(db, true, dir);
     this.dbId = db;
 
     // Prepare common statements

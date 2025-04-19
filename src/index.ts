@@ -11,7 +11,7 @@ export class SqliteSTM {
     this.db = new Database(`file:memdb${db}?mode=memory&cache=shared`);
 
     // Enable JSON support
-    // this.db.pragma('journal_mode = WAL');
+    this.db.pragma('journal_mode = WAL');
     this.db.pragma('json_enabled = ON');
 
     // Create table for storing TVars

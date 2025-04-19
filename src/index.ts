@@ -20,7 +20,7 @@ export class SqliteSTM {
       // dir should be a temp directory;
       dir = os.tmpdir();
     }
-    const localDb = new Database(`${dir}/memdb${db}`, {});
+    const localDb = new Database(`${dir}/memdb${db}?mode=memory&cache=shared`, {});
 
     // Enable JSON support
     localDb.pragma('journal_mode = WAL');
